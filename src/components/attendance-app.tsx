@@ -324,13 +324,26 @@ export function AttendanceApp() {
           const data = await res.json();
           if (data.records && typeof data.records === "object") {
             const serverRecords: Record<string, string> = data.records;
-            setRecords(serverRecords);
-            saveStoredRecords(serverRecords);
+            const lastResetAt: string | null = data.lastResetAt ?? null;
+            const deletedNiks: string[] = Array.isArray(data.deletedNiks) ? data.deletedNiks : [];
 
-            // Silent Auto-Unlock: If current device was locked to a participant whose attendance
-            // was deleted or reset by admin in /admin-enigma, automatically unlock this device!
             const currentLock = getStoredDeviceLock();
-            if (currentLock && !serverRecords[currentLock.nik]) {
+
+            // Check if this device lock was explicitly reset or deleted by admin:
+            let isLockInvalidated = false;
+            if (currentLock) {
+              // 1. If admin reset ALL attendance after this device checked in:
+              if (lastResetAt && new Date(lastResetAt).getTime() > new Date(currentLock.timestamp).getTime()) {
+                isLockInvalidated = true;
+              }
+              // 2. If admin explicitly deleted this specific participant:
+              if (deletedNiks.includes(currentLock.nik)) {
+                isLockInvalidated = true;
+              }
+            }
+
+            if (isLockInvalidated) {
+              // Valid admin unlock: clear device lock and reset UI so user can re-attend
               localStorage.removeItem(DEVICE_LOCK_KEY);
               localStorage.removeItem(ATTENDANCE_STORAGE_KEY);
               setDeviceLock(null);
@@ -338,6 +351,24 @@ export function AttendanceApp() {
               setScannedTime(null);
               setTypedNameCount(0);
               setRevealedFieldsCount(0);
+              setRecords(serverRecords);
+              saveStoredRecords(serverRecords);
+            } else {
+              // Merge server records with client local records to guarantee resilience!
+              const mergedRecords = { ...getStoredRecords(), ...serverRecords };
+              if (currentLock) {
+                mergedRecords[currentLock.nik] = mergedRecords[currentLock.nik] || currentLock.timestamp;
+                // If server is missing this participant's attendance, heal the server!
+                if (!serverRecords[currentLock.nik]) {
+                  void fetch("/api/attendance", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ nik: currentLock.nik, timestamp: currentLock.timestamp }),
+                  }).catch(() => {});
+                }
+              }
+              setRecords(mergedRecords);
+              saveStoredRecords(mergedRecords);
             }
           }
         }

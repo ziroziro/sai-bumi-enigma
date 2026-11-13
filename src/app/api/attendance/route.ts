@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  getServerAttendanceRecords,
+  getServerAttendanceMetadata,
   recordServerAttendance,
   resetAllServerAttendance,
 } from "@/server/attendance-store";
@@ -9,8 +9,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const records = getServerAttendanceRecords();
-    return NextResponse.json({ records });
+    const meta = getServerAttendanceMetadata();
+    return NextResponse.json({
+      records: meta.records,
+      lastResetAt: meta.lastResetAt,
+      deletedNiks: meta.deletedNiks,
+    });
   } catch {
     return NextResponse.json({ error: "Gagal memuat data kehadiran." }, { status: 500 });
   }
@@ -43,4 +47,3 @@ export async function DELETE() {
     return NextResponse.json({ error: "Gagal mengosongkan data absensi." }, { status: 500 });
   }
 }
-

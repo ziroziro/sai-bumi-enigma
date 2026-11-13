@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   deleteServerAttendance,
-  getServerAttendanceRecords,
+  getServerAttendanceMetadata,
   resetAllServerAttendance,
 } from "@/server/attendance-store";
 
@@ -30,8 +30,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Sesi admin tidak valid." }, { status: 401 });
   }
 
-  const records = getServerAttendanceRecords();
-  return NextResponse.json({ records });
+  const meta = getServerAttendanceMetadata();
+  return NextResponse.json({
+    records: meta.records,
+    lastResetAt: meta.lastResetAt,
+    deletedNiks: meta.deletedNiks,
+  });
 }
 
 export async function DELETE(request: Request) {
@@ -56,4 +60,3 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Gagal menghapus data absensi." }, { status: 500 });
   }
 }
-
